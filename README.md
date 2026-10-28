@@ -68,7 +68,8 @@ S2-E3 聚合连击(代码) ── hits / watchlist
 | S1-D 合并去噪 | `nodes/node_s1d_merge_tags.py` | 代码 | `stock_list` `tag_body` | `stock_tags` `n_tag_total` `raw_payload` `trade_date` |
 | S2-E3 聚合连击 | `nodes/node_s2e3_aggregate.py` | 代码 | `records` | `hits` `watchlist` `trade_date` `days_total` `tot_amt` |
 | S3-F 共识打分 | `nodes/node_s3f_score.py` | 代码 | `records` `watchlist` | `scored` `picks` `passed` `strong` |
-| S4-G 新闻检索 | 搜索插件 | 插件 | `item.sector` | `news` |
+| S4-G0 拆字段 | `nodes/node_s4g0_flatten.py` | 代码 | `item` | `sector` `stocks` `query` `pct_avg` `excess` `streak` |
+| S4-G 新闻检索 | 搜索插件 | 插件 | `query` | `data.doc_results` |
 | S4-H 产业逻辑 | 大模型 | LLM | `item` + `news` | JSON（见 prompts/） |
 | S4-I 逻辑分级 | `nodes/node_s4i_classify.py` | 代码 | `results` | `logic` `count_a/b/c` `summary` |
 

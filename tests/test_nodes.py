@@ -222,6 +222,27 @@ check("空输入不报错", out_empty["logic"] == [] and "无板块" in out_empt
 
 print(f"  · {out_i['summary']}")
 
+# ---------------------------------------------------------------- S4-G0
+print("S4-G0 拆字段")
+g0 = load_node("node_s4g0_flatten.py")
+
+pick = {"sector": "通信", "stocks": ["中际旭创", "新易盛"], "score": 91.0,
+        "pct_avg": 6.4, "excess": 1.8, "streak": 3, "distinct": 3}
+out_g0 = run(g0["main"], item=pick)
+check("sector 提取", out_g0["sector"] == "通信", out_g0["sector"])
+check("stocks 拼成字符串", out_g0["stocks"] == "中际旭创、新易盛", out_g0["stocks"])
+check("query 自动拼好",
+      out_g0["query"] == "通信 公告 扩产 中标 涨价 研报", out_g0["query"])
+check("数值类型正确",
+      isinstance(out_g0["pct_avg"], float) and isinstance(out_g0["streak"], int))
+
+out_g0b = run(g0["main"], item={"item": pick})
+check("被包一层仍能拆", out_g0b["sector"] == "通信", out_g0b["sector"])
+
+out_g0c = run(g0["main"], item={"sector": "白酒"})
+check("缺字段给默认值",
+      out_g0c["stocks"] == "" and out_g0c["streak"] == 0, out_g0c)
+
 # ---------------------------------------------------------------- 汇总
 print()
 if failures:
