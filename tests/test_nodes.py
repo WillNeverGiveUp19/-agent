@@ -179,6 +179,49 @@ check("空输入不报错", empty_f["scored"] == [] and empty_f["picks"] == [])
 print(f"  · 当前样本：{out_f['strong']} 个强共识 / {out_f['passed']} 个达标 / "
       f"最终推荐 {[p['sector'] for p in out_f['picks']]}")
 
+# ---------------------------------------------------------------- S4-I
+print("S4-I 逻辑分级")
+i = load_node("node_s4i_classify.py")
+
+
+def _item(sector, driver, prosperity, duration, conf):
+    return {"sector": sector, "driver": driver, "prosperity": prosperity,
+            "duration": duration, "confidence": conf,
+            "catalyst": ["某公司公告10亿扩产"],
+            "chain": {"upstream": ["光芯片"], "midstream": ["封装"], "downstream": ["数据中心"]},
+            "shovel": ["光芯片"], "risk": ["需求不及预期"], "one_liner": "一句话"}
+
+
+mock = [
+    _item("通信", "订单", "上行", "中", 65),      # A
+    _item("半导体", "技术", "上行", "强", 35),    # 置信度低 -> B
+    _item("白酒", "纯资金", "平稳", "弱", 50),    # C
+    _item("机器人", "事件", "上行", "中", 70),    # B
+    _item("光伏", "政策", "下行", "弱", 60),      # C（景气下行）
+]
+
+out_i = run(i["main"], results=mock)
+check("A 类数量正确", out_i["count_a"] == 1, out_i["count_a"])
+check("B 类数量正确", out_i["count_b"] == 2, out_i["count_b"])
+check("C 类数量正确", out_i["count_c"] == 2, out_i["count_c"])
+check("低置信度 A 降为 B",
+      next(x for x in out_i["logic"] if x["sector"] == "半导体")["class"] == "B")
+check("纯资金归 C",
+      next(x for x in out_i["logic"] if x["sector"] == "白酒")["class"] == "C")
+check("景气下行归 C",
+      next(x for x in out_i["logic"] if x["sector"] == "光伏")["class"] == "C")
+check("A 类排在前面", out_i["logic"][0]["class"] == "A", out_i["logic"][0]["class"])
+check("summary 非空", bool(out_i["summary"]), out_i["summary"])
+
+# 大模型输出被包一层时也要能处理
+out_wrapped = run(i["main"], results=[{"item": x} for x in mock])
+check("包装一层仍能解析", out_wrapped["count_a"] == 1, out_wrapped["count_a"])
+
+out_empty = run(i["main"], results=[])
+check("空输入不报错", out_empty["logic"] == [] and "无板块" in out_empty["summary"])
+
+print(f"  · {out_i['summary']}")
+
 # ---------------------------------------------------------------- 汇总
 print()
 if failures:

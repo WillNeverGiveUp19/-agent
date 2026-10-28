@@ -13,7 +13,8 @@
 | Step 1 | 采集成交额 Top20 + 板块标签 | ✅ 已跑通 |
 | Step 2 | 板块聚合与连击判定 | ✅ 已跑通 |
 | Step 3 | 共识打分（0–100） | ✅ 已实现 |
-| Step 4–8 | 产业逻辑 / 阶段 / 卖水人 / 估值 / 日报 | 📝 设计稿 |
+| Step 4 | 新闻检索 + 产业逻辑 | ✅ 已实现 |
+| Step 5–8 | 阶段 / 卖水人 / 估值 / 日报 | 📝 设计稿 |
 
 ---
 
@@ -42,8 +43,16 @@ S2-E3 聚合连击(代码) ── hits / watchlist
    │                        │
    │                        ▼
    │                 S3-F 共识打分(代码) ── scored / picks
-   ▼                        │
-  结束 ◄────────────────────┘
+   │                        │
+   │                        ▼
+   │              ┌── 循环：picks（最多3个）──┐
+   │              │  S4-G 搜索(插件)         │
+   │              │  S4-H 产业逻辑(大模型)    │
+   │              └────────────┬────────────┘
+   │                           ▼
+   │                  S4-I 逻辑分级(代码) ── logic / summary
+   ▼                           │
+  结束 ◄───────────────────────┘
 ```
 
 **关键设计：库里只存原始数据，指标在读取时现算。**
@@ -59,6 +68,9 @@ S2-E3 聚合连击(代码) ── hits / watchlist
 | S1-D 合并去噪 | `nodes/node_s1d_merge_tags.py` | 代码 | `stock_list` `tag_body` | `stock_tags` `n_tag_total` `raw_payload` `trade_date` |
 | S2-E3 聚合连击 | `nodes/node_s2e3_aggregate.py` | 代码 | `records` | `hits` `watchlist` `trade_date` `days_total` `tot_amt` |
 | S3-F 共识打分 | `nodes/node_s3f_score.py` | 代码 | `records` `watchlist` | `scored` `picks` `passed` `strong` |
+| S4-G 新闻检索 | 搜索插件 | 插件 | `item.sector` | `news` |
+| S4-H 产业逻辑 | 大模型 | LLM | `item` + `news` | JSON（见 prompts/） |
+| S4-I 逻辑分级 | `nodes/node_s4i_classify.py` | 代码 | `results` | `logic` `count_a/b/c` `summary` |
 
 两个 HTTP 节点（S1-A 取榜单、S1-C 取标签）不需要代码，接口与参数见 [docs/](docs/)。
 
@@ -123,6 +135,13 @@ S2-E3 聚合连击(代码) ── hits / watchlist
 | `MAX_PICK` | 3 | 最终推荐几个板块 |
 | `PICK_JACCARD` | 0.5 | 挑选时与已选板块的股票重合度上限 |
 
+### `nodes/node_s4i_classify.py`
+
+| 变量 | 默认 | 含义 |
+|---|---|---|
+| `CLASS_A_DRIVERS` | 政策/订单/涨价/技术 | A 类驱动 |
+| `MIN_CONFIDENCE` | 40 | 低于此值，A 类降为 B 类 |
+
 **调参顺序建议**：先看 `hits` 有多少条（25~40 合理），再看 `watchlist`（8~20 合理），最后看 `picks`（3 个）。多了收紧 `MIN_SHARE`，少了放宽 `MIN_W_EFF`。
 
 > `GATE_STRONG` / `GATE_WATCH` 是**初值，需要校准**。跑两周后用真实的 score 分布决定：
@@ -130,6 +149,17 @@ S2-E3 聚合连击(代码) ── hits / watchlist
 > 分数的首要作用是**当日排序**，绝对门槛的意义没那么大。
 
 ---
+
+## 提示词
+
+Step 4 的大模型提示词在 [`prompts/s4h_industry_logic.md`](prompts/s4h_industry_logic.md)，
+里面写了输入变量、硬约束和合格/不合格样例。
+
+核心约束有两条：
+
+1. **检索不到实质信息时，`driver` 必须填「纯资金」** —— 防止模型用训练数据编造"近期催化"。
+2. **长期叙事不算催化** —— 「AI 需求增长」能讲三年，没有信息量；
+   催化必须带时间点或主体。
 
 ## 本地测试
 
