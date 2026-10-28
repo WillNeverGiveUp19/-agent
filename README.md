@@ -12,7 +12,7 @@
 |---|---|---|
 | Step 1 | 采集成交额 Top20 + 板块标签 | ✅ 已跑通 |
 | Step 2 | 板块聚合与连击判定 | ✅ 已跑通 |
-| Step 3 | 共识打分（0–100） | 🚧 设计完成，未实现 |
+| Step 3 | 共识打分（0–100） | ✅ 已实现 |
 | Step 4–8 | 产业逻辑 / 阶段 / 卖水人 / 估值 / 日报 | 📝 设计稿 |
 
 ---
@@ -39,9 +39,11 @@ S2-E2 查库(数据库) ── 近 3 日
    │  outputList
    ▼
 S2-E3 聚合连击(代码) ── hits / watchlist
-   │
-   ▼
-  结束
+   │                        │
+   │                        ▼
+   │                 S3-F 共识打分(代码) ── scored / picks
+   ▼                        │
+  结束 ◄────────────────────┘
 ```
 
 **关键设计：库里只存原始数据，指标在读取时现算。**
@@ -56,6 +58,7 @@ S2-E3 聚合连击(代码) ── hits / watchlist
 | S1-B 归一化 | `nodes/node_s1b_normalize.py` | 代码 | `body` | `top20` `code_in` `filter_str` `cut` `n` |
 | S1-D 合并去噪 | `nodes/node_s1d_merge_tags.py` | 代码 | `stock_list` `tag_body` | `stock_tags` `n_tag_total` `raw_payload` `trade_date` |
 | S2-E3 聚合连击 | `nodes/node_s2e3_aggregate.py` | 代码 | `records` | `hits` `watchlist` `trade_date` `days_total` `tot_amt` |
+| S3-F 共识打分 | `nodes/node_s3f_score.py` | 代码 | `records` `watchlist` | `scored` `picks` `passed` `strong` |
 
 两个 HTTP 节点（S1-A 取榜单、S1-C 取标签）不需要代码，接口与参数见 [docs/](docs/)。
 
@@ -110,7 +113,21 @@ S2-E3 聚合连击(代码) ── hits / watchlist
 | `STRONG_STREAK` | 3 | 强候选的连续天数 |
 | `WATCH_STREAK` | 2 | 观察等级的连续天数 |
 
-**调参顺序建议**：先看 `hits` 有多少条（25~40 合理），再看 `watchlist`（8~20 合理）。多了就收紧 `MIN_SHARE`，少了就放宽 `MIN_W_EFF`。
+### `nodes/node_s3f_score.py`
+
+| 变量 | 默认 | 含义 |
+|---|---|---|
+| `WEIGHTS` | 各 20 | 五个维度的权重（广度/资金/强度/趋势/健康） |
+| `GATE_STRONG` | 70 | 强共识门槛 |
+| `GATE_WATCH` | 50 | 观察门槛 |
+| `MAX_PICK` | 3 | 最终推荐几个板块 |
+| `PICK_JACCARD` | 0.5 | 挑选时与已选板块的股票重合度上限 |
+
+**调参顺序建议**：先看 `hits` 有多少条（25~40 合理），再看 `watchlist`（8~20 合理），最后看 `picks`（3 个）。多了收紧 `MIN_SHARE`，少了放宽 `MIN_W_EFF`。
+
+> `GATE_STRONG` / `GATE_WATCH` 是**初值，需要校准**。跑两周后用真实的 score 分布决定：
+> 如果每天都有一半板块过 70，就把门槛提到 75~80；如果一个都不达标，说明维度权重需要重新分配。
+> 分数的首要作用是**当日排序**，绝对门槛的意义没那么大。
 
 ---
 

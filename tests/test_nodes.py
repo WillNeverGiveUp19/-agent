@@ -135,6 +135,50 @@ print(f"  · 归并掉的近义标签数：{alias_count}")
 empty = run(e["main"], records=[])
 check("空记录不报错", empty["days_total"] == 0 and empty["hits"] == [])
 
+# ---------------------------------------------------------------- S3-F
+print("S3-F 共识打分")
+f = load_node("node_s3f_score.py")
+
+out_f = run(f["main"], records=records, watchlist=out_e["watchlist"])
+
+check("scored 非空", len(out_f["scored"]) > 0, len(out_f["scored"]))
+check("按分数降序",
+      all(out_f["scored"][i]["score"] >= out_f["scored"][i + 1]["score"]
+          for i in range(len(out_f["scored"]) - 1)))
+check("picks 不超过 MAX_PICK", len(out_f["picks"]) <= 3, len(out_f["picks"]))
+check("picks 分数均达标",
+      all(x["score"] >= 50 for x in out_f["picks"]))
+
+# 每条记录的五个维度之和应等于总分
+bad_sum = [x["sector"] for x in out_f["scored"]
+           if abs(sum(x["dims"].values()) - x["score"]) > 0.2]
+check("维度之和等于总分", not bad_sum, bad_sum[:3])
+
+# picks 之间不能是同一批票
+overlap = []
+for i in range(len(out_f["picks"])):
+    for j in range(i + 1, len(out_f["picks"])):
+        a = set(out_f["picks"][i]["stocks"])
+        b = set(out_f["picks"][j]["stocks"])
+        u = len(a | b)
+        if u and len(a & b) / u >= 0.5:
+            overlap.append((out_f["picks"][i]["sector"], out_f["picks"][j]["sector"]))
+check("picks 之间股票不重合", not overlap, overlap)
+
+check("每条都有 5 个维度",
+      all(len(x["dims"]) == 5 for x in out_f["scored"]))
+check("每条都有 5 条理由",
+      all(len(x["reasons"]) == 5 for x in out_f["scored"]))
+check("重复板块被标记 dup_of",
+      any("dup_of" in x for x in out_f["scored"]),
+      "没有任何板块被判重复，检查 PICK_JACCARD")
+
+empty_f = run(f["main"], records=[], watchlist=[])
+check("空输入不报错", empty_f["scored"] == [] and empty_f["picks"] == [])
+
+print(f"  · 当前样本：{out_f['strong']} 个强共识 / {out_f['passed']} 个达标 / "
+      f"最终推荐 {[p['sector'] for p in out_f['picks']]}")
+
 # ---------------------------------------------------------------- 汇总
 print()
 if failures:
